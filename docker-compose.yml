@@ -1,0 +1,37 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/auth_app
+      # Compose refuses to start without it, rather than running with a weak default.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (openssl rand -base64 48)}
+      TRUST_PROXY: "true"
+      # nginx below serves plain HTTP on localhost. Behind real HTTPS, remove this line.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo-data:
